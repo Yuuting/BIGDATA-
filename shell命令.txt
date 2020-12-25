@@ -1,0 +1,78 @@
+hadoop fs -mkdir /user/stu2020110047/taobao
+hadoop fs -put small_user_log.csv /user/stu2020110047/taobao
+hadoop fs -ls /user/stu2020110047/taobao
+hadoop fs -cat /user/stu2020110047/taobao/small_user_log.csv
+
+beeline -u jdbc:hive2://course-cluster-namenode-0:10000/default -n stu2020110047 -p 110047;
+show databases;
+create database taobao;
+use taobao;
+CREATE EXTERNAL TABLE taobao.user_log(user_id INT,item_id INT,cat_id INT,merchant_id INT,brand_id INT,month STRING,day STRING,action INT,age_range INT,gender INT,province STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE LOCATION '/user/stu2020110047/taobao';
+select * from user_log limit 10;
+
+show tables; 
+show create table user_log;
+desc user_log;
+select brand_id from user_log limit 10; -- 查看日志前10个交易日志的商品品牌
+select month,day,cat_id from user_log limit 20;
+select ul.at, ul.ci  from (select action as at, cat_id as ci from user_log) as ul limit 20;
+select count(*) from user_log; -- 用聚合函数count()计算出表内有多少条行数据
+select count(distinct user_id) from user_log; -- 在函数内部加上distinct，查出user_id不重复的数据有多少条
+select count(*) from (select user_id,item_id,cat_id,merchant_id,brand_id,month,day,action from user_log group by user_id,item_id,cat_id,merchant_id,brand_id,month,day,action having count(*)=1)a;
+select count(distinct user_id) from user_log where action='2';
+select count(*) from user_log where action='2' and brand_id=2661;
+
+select count(distinct user_id) from user_log where action='2'; -- 查询有多少用户在双11购买了商品
+select count(distinct user_id) from user_log; -- 查询有多少用户在双11点击了该店
+select count(*) from user_log where gender=0; --查询双11那天女性购买商品的数量
+select count(*) from user_log where gender=1; --查询双11那天男性购买商品的数量
+select user_id from user_log where action='2' group by user_id having count(action='2')>5; -- 查询某一天在该网站购买商品超过5次的用户id
+
+hadoop fs -put train_after.csv /user/stu2020110047/taobao
+hadoop fs -put test_after.csv /user/stu2020110047/taobao
+hadoop fs -ls /user/stu2020110047/taobao
+
+spark-shell
+import org.apache.spark.SparkConf
+import org.apache.spark.SparkContext
+import org.apache.spark.mllib.regression.LabeledPoint
+import org.apache.spark.mllib.linalg.{Vectors,Vector}
+import org.apache.spark.mllib.classification.{SVMModel, SVMWithSGD}
+import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
+import java.util.Properties
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.Row
+
+val train_data = sc.textFile("/user/stu2020110047/taobao/train_after.csv")
+val test_data = sc.textFile("/user/stu2020110047/taobao/test_after.csv")
+
+val train= train_data.map{line =>
+  val parts = line.split(',')
+  LabeledPoint(parts(4).toDouble,Vectors.dense(parts(1).toDouble,parts
+(2).toDouble,parts(3).toDouble))
+}
+val test = test_data.map{line =>
+  val parts = line.split(',')
+  LabeledPoint(parts(4).toDouble,Vectors.dense(parts(1).toDouble,parts(2).toDouble,parts(3).toDouble))
+}
+
+val numIterations = 20
+val model = SVMWithSGD.train(train, numIterations)
+
+model.clearThreshold()
+val scoreAndLabels = test.map{point =>
+  val score = model.predict(point.features)
+  score+" "+point.label
+}
+scoreAndLabels.collect().foreach(println)
+
+model.setThreshold(0.0)
+scoreAndLabels.collect().foreach(println)
+
+hadoop fs -put hbase.csv /user/stu2020110047/taobao
+hbase shell
+create 'taobao','info'
+hbase org.apache.hadoop.hbase.mapreduce.ImportTsv -Dimporttsv.separator="," -Dimporttsv.columns=HBASE_ROW_KEY,info:user_id,info:age_range,info:gender,info:merchant_id,info:label taobao /user/stu2020110047/taobao/hbase.csv
+scan 'taobao'
+describe 'taobao'
+get 'taobao','9858'
