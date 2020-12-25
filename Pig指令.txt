@@ -1,0 +1,9 @@
+pig -x mapreduce
+records = LOAD '/public/access.log' AS (time:chararray, userID:chararray, serverIP:chararray, hostName:chararray, spName:chararray, uptraffic:int, downtraffic:int);
+filter_records = FILTER records BY spName MATCHES '.*qq.*';
+order_records = ORDER filter_records BY userID;
+group_records = GROUP order_records BY userID;
+sum_records = FOREACH group_records GENERATE group , COUNT(order_records.serverIP) AS count, SUM(order_records.uptraffic) AS sumUpTraffic, SUM(order_records.downtraffic) AS sumDownTraffic;
+DUMP sum_records;
+（截图*2）
+quit

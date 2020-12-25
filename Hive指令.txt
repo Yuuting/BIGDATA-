@@ -1,0 +1,17 @@
+（第一句指令每个人不一样，先在实践引导页面查看）
+beeline -u jdbc:hive2://course-cluster-namenode-0:10000/default -n stu2020110xxx -p 110xxx;
+show databases;
+（将学号替换为自己的，下同）
+create database access_log_stu2020110xxx;
+use access_log_stu2020110xxx;
+create table access(time STRING, userid STRING, serverIP STRING, hostName STRING, spName STRING, upload INT, download INT) row format delimited fields terminated by '\t';
+load data inpath '/user/stu2020110xxx/access.log' overwrite into table access;
+describe database access_log_stu2020110xxx;
+describe access;
+select userid, spname, sum(upload + download) from access group by userid, spname;
+（截图）
+select userid, spname, count(*) from access group by userid, spname;
+（截图）
+drop table access;
+drop database access_log_stu2020110xxx;
+!exit
